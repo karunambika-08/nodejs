@@ -3,6 +3,19 @@
  2. Single threaded. 
  3. It uses event loop to achieve concurrent running of the process
 
+
+# Node JS Server flow
+http.createServer() → creates the server instance.
+
+Callback (req, res) → handles every incoming request.
+
+res.writeHead or statusCode + res.setHeader + res.end → sends the response back.
+
+server.listen(PORT) → binds server to a port.
+
+
+res.end() -> Close the response data and send back to the server, if we don't use res.end() then browser will keep on waiting forever
+
 # Event Loop
 
 The **event loop** is like a queue manager. It decides *when callbacks run* — whether they come from timers, promises, I/O, or other sources.  
@@ -57,4 +70,7 @@ The event loop won’t move forward until the **micro-task queue is empty**.
 4. Move to the next macro-task.  
 
 ---
+
+
+
 
