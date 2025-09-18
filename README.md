@@ -1,3 +1,8 @@
+# Node JS
+ 1. JS runtime Environment, 
+ 2. Single threaded. 
+ 3. It uses event loop to achieve concurrent running of the process
+
 # Event Loop
 
 The **event loop** is like a queue manager. It decides *when callbacks run* — whether they come from timers, promises, I/O, or other sources.  
