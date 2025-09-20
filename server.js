@@ -1,95 +1,60 @@
-const express = require('express');
+const http = require('http');
+const url = require('url');
+const uaParser = require("ua-parser-js");
 
-const app = express();
-const PORT = 3000;
-let reqCount = 0;
-const posts = [];
+const server = http.createServer((req, res) => {
+
+    //Response Headers:  tell the browser that kind of data we are sending
+    // res.statusCode = 200;
+    // res.setHeader('Content-Type', 'text/html');
+    res.writeHead(200, "OK", { 'content-type': 'text/html' });
 
 
+    //Url Parsing
+    const parsedURL = new URL(req.url, `https://${req.headers.host}`)
+    console.log("Request received from", req.url);
 
-//App level middleware - runs for all requests
-//Logger middleware
-app.use((req, res, next) => {
-    const reqTime = new Date().toISOString();
-    console.log(`${req.method} ${req.url} - ${reqTime}`);
-    next();
+
+    //User agent in header Parsing details
+    const parser = new uaParser(req.headers['user-agent']);
+    const requestUserDetails = parser.getResult();
+    console.log("User Details", requestUserDetails)
+    const browser = requestUserDetails?.browser?.name;
+    if (browser === 'Chrome') {
+        res.write("<h1>Hey, Chrome User</h1>")
+    }
+    console.log("Reqest From brower", requestUserDetails?.browser?.name);
+    console.log("Client ID", req.socket.remoteAddress);
+    console.log("Port", req.socket.remotePort);
+
+    //Route handling
+    console.log("Path", parsedURL.pathname);
+    console.log("Request Method", req.method);
+    const path = parsedURL.pathname;
+    handleRoute(req.method, parsedURL.pathname, res);
+
+    //Query Params extractions
+    console.log("QueryParams", parsedURL.searchParams.get('name'));
+
+    //Closes the response and sends data to the client.
+    res.end("Nice connecting to you, Bye");
 });
 
 
-//Custom middlewares
-const checkReq = (req, res, next) => {
-    const userAgentBrower = req.headers["sec-ch-ua"];
-    console.log("User agent", userAgentBrower);
-    console.log("req.headers['x-postman-request']", req.headers['x-postman-request']);
-    if (userAgentBrower?.includes('Chrome') || req.headers['x-postman-request']) {
-        next();
-    } else {
-        const err = new Error("Forbidden Entry");
-        err.status = 403;
-        next(err);
+function handleRoute(method, path, res) {
+    if (method === "GET") {
+        if (path.includes('/about')) {
+            res.write("<h1> About me </h1>");
+            res.write("<h1>I am Kaviiiii's server😁💻</h1>");
+        } else if (path.includes('/help')) {
+            res.write("<h1> Help </h1>");
+            res.write("<h1>How can I help you?</h1>");
+        } else {
+            res.write("<h1> Home </h1>");
+            res.write("<p>Hey ,Welcome to my server space</p>");
+        }
     }
     return;
-};
+}
 
-const checkTime = (req, res, next) => {
-    if (new Date().getHours() > 22) {
-        return next(new Error("Time limit reached,kindly try tomorrow"));
-    }
-    next();
-};
-
-app.use(checkReq);
-
-app.use(checkTime);
-
-app.use((req, res, next) => {
-    console.log("Total request handled", reqCount++);
-    next();
-});
-
-
-app.use((req, res, next) => {
-    req.user = "Kavi";
-    next();
-})
-
-// Built-in middleware
-app.use(express.json());
-
-//Routes
-app.get('/posts', (req, res) => {
-    const getPosts = posts;
-    res.json(getPosts);
-});
-
-app.post('/posts', (req, res) => {
-    const newPost = req.body;
-    if (newPost) {
-        posts.push(newPost);
-    }
-    res.send(posts)
-});
-
-// Error-handling middleware
-app.use((err, req, res, next) => {
-    console.error("Error caught", err.message);
-    const status = err.status || 500
-    return res.status(status).send({ error: err.message });
-});
-
-
-//start server
-app.listen(PORT, () => {
-    console.log("Server is up and running");
-});
-
-//process.on("SIGINT") catches when Ctrl + C pressed(or when the server is asked to stop).
-process.on("SIGINT", () => {
-    console.log("Server shutting down...");
-    process.exit();
-});
-
-//Note for later use
-//Close DB connections
-// Flush logs
-// Save in -memory data(like posts)
+server.listen(3000, "localhost", () => { console.log("server is running") });
