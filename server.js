@@ -1,9 +1,7 @@
 const express = require('express');
 const MongoStore = require('connect-mongo');
 const session = require('express-session');
-const express = require('express');
-const MongoStore = require('connect-mongo');
-const session = require('express-session');
+require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -58,6 +56,9 @@ app.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => {
+    if (req.session.user && req.session.user.username) {
+        return res.redirect('/dashboard');
+    }
     res.send(`
     <form method="POST" action="/login">
       <label>Username: <input type="text" name="username" /></label><br>
@@ -70,11 +71,20 @@ app.get('/login', (req, res) => {
 //Routes
 app.post('/login', (req, res, next) => {
     try {
+
         const { username, password } = req.body;
         const user = users.find(user => user.username === username && user.password === password);
         if (user) {
-            req.session.user = { username: user.username }; //Session will be save in memory after having something to store
-            return res.send(`Logged in successfully. Session ID: ${req.session.id}`);
+            return req.session.regenerate(err => {
+                if (err) return next(err);
+                req.session.user = { username: user.username }; //Session will be save in memory after having something to store
+                req.session.save(err => {
+                    if (err) return next(err);
+                    return res.send(`Logged in successfully. Session ID: ${req.session.id}`);
+                }
+
+                )
+            })
         }
         const err = new Error("Invalid credentials");
         err.status = 401;
@@ -102,7 +112,7 @@ app.get('/logout', (req, res, next) => {
         if (err) {
             err.message = "Error logging out";
             err.status = 500;
-            next(err);
+            return next(err); // Add return here
         }
         res.send("Logged out successfully");
     })
@@ -120,3 +130,5 @@ process.on("SIGINT", () => {
     console.log("Server shutting down...");
     process.exit();
 });
+
+//todo: check CSRF attack even more after adding regeneration
