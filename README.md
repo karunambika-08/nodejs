@@ -1,73 +1,114 @@
-# Node JS
- 1. JS runtime Environment, 
- 2. Single threaded. 
- 3. It uses event loop to achieve concurrent running of the process
+# Authentication Fundamentals
 
+## Authentication vs Authorization
 
-# Node JS Server flow
-http.createServer() → creates the server instance.
-
-Callback (req, res) → handles every incoming request.
-
-res.writeHead or statusCode + res.setHeader + res.end → sends the response back.
-
-server.listen(PORT) → binds server to a port.
-
-
-res.end() -> Close the response data and send back to the server, if we don't use res.end() then browser will keep on waiting forever
-
-# Event Loop
-
-The **event loop** is like a queue manager. It decides *when callbacks run* — whether they come from timers, promises, I/O, or other sources.  
-Think of it as the traffic controller that makes sure everything gets executed in the right order.  
+| Concept            | Description                                       | Example                                            |
+| ------------------ | ------------------------------------------------- | -------------------------------------------------- |
+| **Authentication** | Verifying a user’s identity                       | Login using email/password, OTP, token, biometrics |
+| **Authorization**  | Determining what an authenticated user can access | Admin can delete user data                         |
 
 ---
 
-## Phases of the Event Loop (Simplified)
+## Authentication Methods
 
-1. **Timers Phase** → Runs callbacks from `setTimeout` and `setInterval`.  
-2. **I/O Callbacks** → Handles system events (like when a file finishes reading or a network request completes).  
-3. **Idle, Prepare** → Internal stuff (you don’t usually deal with this).  
-4. **Poll Phase** → Waits for new I/O events, processes them if ready.  
-5. **Check Phase** → Runs `setImmediate` callbacks.  
-6. **Close Callbacks** → Handles cleanup when things close (like sockets).  
+1. **Session-based** (Stateful, uses cookies) (Stateful because server maintains session state.)
+2. **Token-based** (Stateless, uses JWT) (Stateless because server doesn't store session info.)
+3. **OAuth / OpenID** (Login via Google, Facebook, etc.)
 
 ---
 
-##  Macro-tasks
+## Quick Analogy
 
-Also called **tasks**.  
-These are bigger chunks of work, and the event loop runs them *one at a time*.  
-
-**Examples:**  
-- `setTimeout`  
-- `setInterval`  
-- `setImmediate` (Node.js only)  
-- I/O callbacks (like `fs.readFile`)  
-- UI rendering (in browsers)  
-
- After finishing one macro-task, the event loop always checks for micro-tasks before moving to the next one.  
+* **Stateful** → Server keeps a guestbook of logged-in users.
+* **Stateless** → User carries a ticket proving their identity.
 
 ---
 
-## Micro-tasks
+## Stateful Authentication
 
-These are **smaller, high-priority jobs**. They run right after the current code finishes, *before the event loop moves on to the next macro-task*.  
+Server stores session information (memory, DB, Redis) and verifies it for every request.
 
-**Examples:**  
-- Promises (`.then`, `.catch`, `.finally`)  
-- `queueMicrotask()` (browser + Node)  
-- `process.nextTick()` (Node.js only — even higher priority than Promises!)  
+**Flow:**
 
-The event loop won’t move forward until the **micro-task queue is empty**.  
+```text
+User logs in → Server creates session → Sends cookie with sessionID → Client sends cookie with every request → Server verifies session
+```
+
+**Pros:**
+
+* Simple to implement
+* Easy to invalidate sessions
+
+**Cons:**
+
+* Server memory grows with number of users
+* Doesn’t scale well for large/distributed apps
 
 ---
 
-##  Event Loop task handling
-1. Take one macro-task (e.g., a `setTimeout`).  
-2. Run all its code.  
-3. Check the micro-task queue → run everything there until empty.  
-4. Move to the next macro-task.  
+## Stateless Authentication (JWT)
+
+Server does **not** store session info; client stores all necessary data.
+
+**Flow:**
+
+```text
+User logs in → Server generates JWT → Sends JWT to client → Client stores token → Client sends token in requests → Server verifies token
+```
+
+**Pros:**
+
+* Scales easily, no server-side storage
+* Great for microservices/distributed apps
+
+**Cons:**
+
+* Token invalidation is tricky
+* Must manage token expiration & refresh carefully
+
+---
+
+## Security Best Practices
+
+* Never store plain passwords! Hash them using **bcrypt** or **argon2**.
+* Encourage strong passwords (mix letters, numbers, symbols).
+* Implement rate-limiting to prevent brute-force attacks.
+
+---
+
+## Cookies Overview
+
+Cookies are key in **stateful authentication**.
+
+| Cookie Type     | Description                            | Example / Behavior                               |
+| --------------- | -------------------------------------- | ------------------------------------------------ |
+| **Session**     | Temporary, deleted when browser closes | `Set-Cookie: sessionID=abc123; HttpOnly; Path=/` |
+| **Persistent**  | Stored on disk, track preferences      | Keeps users logged in across sessions(Remember me)            |
+| **Same-Site**   | Controls cross-site requests           | Strict, Lax, None                                |
+| **Https-only**   | Cannot be accessed via JavaScript (document.cookie) in the browser. Protects against XSS attacks (cross-site scripting).                                                | Always use for session IDs or tokens:                                |
+| **Secure**      | Sent only over HTTPS                   | Helps prevent CSRF attacks                       |
+| **First-party** | Set by the domain you visit            | Visiting `example.com` sets a first-party cookie |
+| **Third-party** | Set by external domains                | Ad from `ads.com` in `example.com` is sets as a third-party cookie      |
+
+
+**Same-Site Cookie Behavior:**
+
+| Type   | Example Scenario                                              |
+| ------ | ------------------------------------------------------------- |
+| Strict | Link from another site → cookie **not sent**, user logged out |
+| Lax    | Top-level navigation allowed, cross-site POST blocked         |
+| None   | Sent in all requests, must use `Secure` (HTTPS only)          |
+
+**Code Example:**
+
+```http
+Set-Cookie: sessionID=abc123.Singnature; HttpOnly; Secure; SameSite=Strict; Path=/; Max-Age=3600
+```
+HttpOnly → JS can’t access
+Secure → only HTTPS
+SameSite=Strict → prevents cross-site requests
+Path=/ -> Cookie is valid for all routes under /
+Max-Age=3600 → expires in 1 hour
 
 ---
 

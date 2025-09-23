@@ -1,60 +1,119 @@
-const http = require('http');
-const url = require('url');
-const uaParser = require("ua-parser-js");
+const express = require('express');
+const MongoStore = require('connect-mongo');
+const session = require('express-session');
 
-const server = http.createServer((req, res) => {
+const app = express();
+const PORT = process.env.PORT || 3000;
+const MONGO_SESSION_URL = process.env.MONGO_SESSION_URL;
 
-    //Response Headers:  tell the browser that kind of data we are sending
-    // res.statusCode = 200;
-    // res.setHeader('Content-Type', 'text/html');
-    res.writeHead(200, "OK", { 'content-type': 'text/html' });
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
-
-    //Url Parsing
-    const parsedURL = new URL(req.url, `https://${req.headers.host}`)
-    console.log("Request received from", req.url);
-
-
-    //User agent in header Parsing details
-    const parser = new uaParser(req.headers['user-agent']);
-    const requestUserDetails = parser.getResult();
-    console.log("User Details", requestUserDetails)
-    const browser = requestUserDetails?.browser?.name;
-    if (browser === 'Chrome') {
-        res.write("<h1>Hey, Chrome User</h1>")
+app.use(session({
+    secret: 'mySecret',
+    resave: false,
+    saveUninitialized: false,
+    store: MongoStore.create({
+        mongoUrl: MONGO_SESSION_URL,
+        ttl: 60 * 30
+    }),
+    cookie: {
+        sameSite: true,
+        httpOnly: false,
+        secure: false,
+        maxAge: 1000 * 60 * 10
     }
-    console.log("Reqest From brower", requestUserDetails?.browser?.name);
-    console.log("Client ID", req.socket.remoteAddress);
-    console.log("Port", req.socket.remotePort);
+}));
 
-    //Route handling
-    console.log("Path", parsedURL.pathname);
-    console.log("Request Method", req.method);
-    const path = parsedURL.pathname;
-    handleRoute(req.method, parsedURL.pathname, res);
 
-    //Query Params extractions
-    console.log("QueryParams", parsedURL.searchParams.get('name'));
+const users = [
+    { id: '1', username: "John", password: 'J0hn124' },
+    { id: '2', username: "Phoebe", password: "Ph0ebe123" },
+    { id: '3', username: "Amy", password: "@my123" }
+];
 
-    //Closes the response and sends data to the client.
-    res.end("Nice connecting to you, Bye");
+function authenticate(req, res, next) {
+    try {
+        if (req.session.user && req.session.user.username) {
+            next();
+        }
+        const err = new Error("Unauthorized, Please login");
+        err.status = 403;
+        return next(err);
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+};
+
+app.get('/', (req, res) => {
+    if (req.session.user && req.session.user.username) {
+        res.redirect('/dashboard');
+    } else {
+        res.redirect('/login')
+    }
+});
+
+app.get('/login', (req, res) => {
+    res.send(`
+    <form method="POST" action="/login">
+      <label>Username: <input type="text" name="username" /></label><br>
+      <label>Password: <input type="password" name="password" /></label><br>
+      <button type="submit">Login</button>
+    </form>
+  `);
+});
+
+//Routes
+app.post('/login', (req, res, next) => {
+    try {
+        const { username, password } = req.body;
+        const user = users.find(user => user.username === username && user.password === password);
+        if (user) {
+            req.session.user = { username: user.username }; //Session will be save in memory after having something to store
+            return res.send(`Logged in successfully. Session ID: ${req.session.id}`);
+        }
+        const err = new Error("Invalid credentials");
+        err.status = 401;
+        return next(err);
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
 });
 
 
-function handleRoute(method, path, res) {
-    if (method === "GET") {
-        if (path.includes('/about')) {
-            res.write("<h1> About me </h1>");
-            res.write("<h1>I am Kaviiiii's server😁💻</h1>");
-        } else if (path.includes('/help')) {
-            res.write("<h1> Help </h1>");
-            res.write("<h1>How can I help you?</h1>");
-        } else {
-            res.write("<h1> Home </h1>");
-            res.write("<p>Hey ,Welcome to my server space</p>");
-        }
-    }
-    return;
-}
 
-server.listen(3000, "localhost", () => { console.log("server is running") });
+app.get('/dashboard', authenticate, (req, res, next) => {
+    try {
+        res.send(`Welcome to the dashboard, ${req.session.user.username}`);
+    } catch (err) {
+        console.log(err);
+        next(err);
+    }
+});
+
+
+app.get('/logout', (req, res, next) => {
+    req.session.destroy(err => {
+        if (err) {
+            err.message = "Error logging out";
+            err.status = 500;
+            next(err);
+        }
+        res.send("Logged out successfully");
+    })
+});
+
+app.use((err, req, res, next) => {
+    console.log("Error caught", err.message);
+    const status = err.status || 500;
+    return res.status(status).send({ error: err.message });
+});
+
+app.listen(PORT, () => { console.log("Server is running") });
+
+process.on("SIGINT", () => {
+    console.log("Server shutting down...");
+    process.exit();
+});
